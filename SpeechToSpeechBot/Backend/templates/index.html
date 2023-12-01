@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Speech-to-Speech Bot</title>
+    <style>
+         body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+
+        #container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-shadow: 0px 0px 5px #aaa;
+        }
+
+        h1 {
+            margin-top: 0;
+        }
+
+        button {
+            margin-top: 10px;
+        }
+
+        audio {
+            margin-top: 20px;
+        }
+        body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+.chat-container {
+    max-width: 400px;
+    margin: auto;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+}
+
+.chat-box {
+    padding: 10px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.chat-message {
+    margin-bottom: 10px;
+    padding: 8px;
+    border-radius: 5px;
+}
+
+.bot {
+    background-color: #f1f1f1;
+}
+
+.user {
+    background-color: #dcf8c6;
+    text-align: right;
+}
+
+.input-container {
+    display: flex;
+    padding: 10px;
+    background-color: #f7f7f7;
+    border-top: 1px solid #ccc;
+}
+
+#user-input {
+    flex-grow: 1;
+    padding: 6px;
+    border: none;
+    border-radius: 5px;
+    outline: none;
+}
+
+#send-button {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 6px 12px;
+    cursor: pointer;
+}
+    </style>
+</head>
+<body>
+    <div id="container">
+        <h1>Speech-to-Speech Bot</h1>
+        <button id="recordButton">Record Audio</button>
+        <p id="status">Status: Idle</p>
+        <audio id="audioPlayer" controls style="display: none;"></audio>
+    </div>
+
+    <div class="chat-container">
+        <div class="chat-box" id="chat-box">
+            <div class="chat-message bot">Hello! How can I help you?</div>
+        </div>
+        <div class="input-container">
+            <input type="text" id="user-input" placeholder="Type your message...">
+            <button id="recordButton">Record Audio</button>
+            <button id="send-button">Send</button>
+        </div>
+    </div>
+    <script>
+        const recordButton = document.getElementById('recordButton');
+        const statusText = document.getElementById('status');
+        const audioPlayer = document.getElementById('audioPlayer');
+
+        recordButton.addEventListener('click', async () => {
+            statusText.textContent = 'Status: Loading...';
+            recordButton.disabled = true;
+
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream);
+
+            const chunks = [];
+            mediaRecorder.ondataavailable = event => {
+                chunks.push(event.data);
+            };
+
+            mediaRecorder.onstop = async () => {
+                const blob = new Blob(chunks, { type: 'audio/wav' });
+                const url = URL.createObjectURL(blob);
+                audioPlayer.src = url;
+                audioPlayer.style.display = 'block';
+                statusText.textContent = 'Status: Listening';
+
+                const formData = new FormData();
+                formData.append('audio', blob, 'audio.wav');
+                
+                // Send the recorded audio to the server for processing
+                try {
+                    const response = await fetch('/process', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    if (response.ok) {
+                        const audioResponse = await response.blob();
+                        console.log(audioResponse);
+                        const audioUrl = URL.createObjectURL(audioResponse);
+                        console.log(audioUrl);
+                        audioPlayer.src = audioUrl;
+                        audioPlayer.style.display = 'block';
+                        statusText.textContent = 'Status: Audio response received';
+                    }
+                } catch (error) {
+                    console.error('Error processing audio:', error);
+                }
+
+                stream.getTracks().forEach(track => track.stop());
+                recordButton.disabled = false;
+            };
+
+            mediaRecorder.start();
+            setTimeout(() => mediaRecorder.stop(), 5000); // Stop recording after 5 seconds
+        });
+
+        const chatBox = document.getElementById("chat-box");
+        const userInput = document.getElementById("user-input");
+        const sendButton = document.getElementById("send-button");
+
+        sendButton.addEventListener("click", sendMessage);
+
+        function sendMessage() {
+            const userMessage = userInput.value;
+            if (userMessage.trim() !== "") {
+                displayMessage(userMessage, "user");
+                userInput.value = "";
+                sendUserMessageToServer(userMessage);
+            }
+        }
+
+        function displayMessage(message, sender) {
+            const messageDiv = document.createElement("div");
+            messageDiv.textContent = message;
+            messageDiv.classList.add("chat-message", sender);
+            chatBox.appendChild(messageDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        async function sendUserMessageToServer(message) {
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: message }),
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    displayMessage(data,'bot');
+                   
+                } else {
+                    console.error('Error:', response.statusText);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+    </script>
+</body>
+</html>
+
+<!-- 
+var message = {
+    "type": "template",
+    "AlwaysShowGlobalButtons": false,
+    "payload": {
+      "text": "Things I can help you with",
+      "template_type": "list",
+      "elements": [
+        {
+          "title": "Incident",
+          "image_url": "https://img.icons8.com/external-icematte-lafs/62/external-Incident-it-icematte-lafs.png",
+          "default_action": {
+            "type": "text",
+            "messenger_extensions": true,
+            "webview_height_ratio": "compact"
+          },
+          "buttons": [
+            {
+              "title": "Click",
+              "type": "postback",
+              "payload": "1",
+              "messenger_extensions": true,
+              "webview_height_ratio": "compact"
+            }
+          ]
+        },
+        {
+          "title": "Apply Leave",
+          "image_url": "https://img.icons8.com/color/48/reviewer-male--v1.png",
+          "default_action": {
+            "type": "text",
+            "messenger_extensions": true,
+            "webview_height_ratio": "compact"
+          },
+          "buttons": [
+            {
+              "title": "Click",
+              "type": "postback",
+              "payload": "2",
+              "messenger_extensions": true,
+              "webview_height_ratio": "compact"
+            }
+          ]
+        },
+        {
+          "title": "Book a Meeting room",
+          "image_url": "https://img.icons8.com/clouds/100/meeting-room.png",
+          "default_action": {
+            "type": "text",
+            "messenger_extensions": true,
+            "webview_height_ratio": "compact"
+          },
+          "buttons": [
+            {
+              "title": "Click",
+              "type": "postback",
+              "payload": "3",
+              "messenger_extensions": true,
+              "webview_height_ratio": "compact"
+            }
+          ]
+        },
+        {
+          "title": "Manage Workspaces",
+          "image_url": "https://img.icons8.com/clouds/100/under-computer.png",
+          "default_action": {
+            "type": "text",
+            "messenger_extensions": true,
+            "webview_height_ratio": "compact"
+          },
+          "buttons": [
+            {
+              "title": "Click",
+              "type": "postback",
+              "payload": "4",
+              "messenger_extensions": true,
+              "webview_height_ratio": "compact"
+            }
+          ]
+        },
+        {
+          "title": "Reset Password",
+          "image_url": "https://img.icons8.com/ultraviolet/40/re-enter-pincode.png",
+          "default_action": {
+            "type": "text",
+            "messenger_extensions": true,
+            "webview_height_ratio": "compact"
+          },
+          "buttons": [
+            {
+              "title": "Click",
+              "type": "postback",
+              "payload": "5",
+              "messenger_extensions": true,
+              "webview_height_ratio": "compact"
+            }
+          ]
+        },
+        {
+          "title": "Display the Notifications",
+          "image_url": "https://img.icons8.com/fluency/48/search-bar.png",
+          "default_action": {
+            "type": "text",
+            "messenger_extensions": true,
+            "webview_height_ratio": "compact"
+          },
+          "buttons": [
+            {
+              "title": "Click",
+              "type": "postback",
+              "payload": "6",
+              "messenger_extensions": true,
+              "webview_height_ratio": "compact"
+            }
+          ]
+        }
+      ]
+    }
+  };
+  
+  print(JSON.stringify(message)); -->
+  
